@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
 import os
-
+from tqdm import tqdm 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -36,17 +36,22 @@ class DeepfakeDataset(Dataset):
 class SimpleTransformer(nn.Module):
     def __init__(self):
         super(SimpleTransformer, self).__init__()
-        self.flatten = nn.Flatten()
+        self.conv1 = nn.Conv2d(3, 128, kernel_size=3, stride=1, padding=1)  # Reduce channels to 128
+        self.pool = nn.AdaptiveAvgPool2d((16, 16))  # Reduce spatial size to 16x16
+        self.flatten = nn.Flatten(start_dim=2)  # Flatten last two dimensions, keep batch and channel dims
+        self.projection = nn.Linear(16 * 16, 128)  # Project to 128-dim embeddings
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=128, nhead=8)
         self.transformer = nn.TransformerEncoder(self.transformer_layer, num_layers=2)
-        self.fc = nn.Linear(128 * 128, 2)
+        self.fc = nn.Linear(128, 2)  # Classifier layer
 
     def forward(self, x):
-        x = self.flatten(x)
-        x = x.unsqueeze(1)  
-        x = self.transformer(x)
-        x = x.mean(dim=1)  
-        x = self.fc(x)
+        x = self.conv1(x)  # (B, 128, 128, 128)
+        x = self.pool(x)  # (B, 128, 16, 16)
+        x = self.flatten(x)  # (B, 128, 256)
+        x = self.projection(x)  # (B, 128, 128) -> Now fits Transformer
+        x = self.transformer(x)  # (B, 128, 128)
+        x = x.mean(dim=1)  # Global Average Pooling over sequence
+        x = self.fc(x)  # (B, 2)
         return x
 
 
@@ -68,14 +73,14 @@ total = 0
 
 model.eval()
 with torch.no_grad():
-    for images, labels in dataloader:
+    for images, labels in tqdm(dataloader, desc="Evaluating", unit="batch"):
         images = images.to(device)
         labels = labels.to(device)
         outputs = model(images)
         predictions = torch.argmax(outputs, dim=1)
         correct += (predictions == labels).sum().item()
         total += labels.size(0)
-        print(predictions, labels)
+        #print(predictions, labels)
 
 
 accuracy = 100 * correct / total
