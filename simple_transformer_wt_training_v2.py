@@ -1,3 +1,5 @@
+# Added better data augmentation
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -74,10 +76,13 @@ num_epochs = 20
 # === Data Augmentation & Normalization ===
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
-    transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
+    transforms.RandomHorizontalFlip(),  # %50 olasılıkla yatay çevirme
+    transforms.RandomRotation(10),      # 10 dereceye kadar rastgele döndürme
+    transforms.ColorJitter(brightness=0.2, contrast=0.2), # Parlaklık ve kontrast değişiklikleri
     transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,)) # Daha iyi ağırlıklandırma
 ])
+
 
 # === Dataset & DataLoader ===
 dataset = DeepfakeDataset(root_dir= dataset_root_dir, transform=transform)
